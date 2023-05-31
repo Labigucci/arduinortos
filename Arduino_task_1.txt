@@ -1,0 +1,35 @@
+#include <Arduino_FreeRTOS.h>
+
+
+// Pin number for the LED
+const int LED_PIN = 13;
+
+// Task delay (in milliseconds) for a 10 Hz frequency
+const TickType_t TASK_DELAY = pdMS_TO_TICKS(100);
+
+// Task function
+void blinkTask(void* pvParameters) {
+  (void)pvParameters; // Unused parameter
+  
+  pinMode(LED_PIN, OUTPUT);
+  
+  while (1) {
+    digitalWrite(LED_PIN, HIGH); // Turn the LED on
+    vTaskDelay(TASK_DELAY / 2);  // Delay for half the period
+    
+    digitalWrite(LED_PIN, LOW);  // Turn the LED off
+    vTaskDelay(TASK_DELAY / 2);  // Delay for half the period
+  }
+}
+
+void setup() {
+  // Create the blink task
+  xTaskCreate(blinkTask, "Blink Task", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+  
+  // Start the FreeRTOS scheduler
+  vTaskStartScheduler();
+}
+
+void loop() {
+  // Empty loop as FreeRTOS handles the tasks
+}

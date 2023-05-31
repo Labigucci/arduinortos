@@ -1,0 +1,127 @@
+#include <Arduino_FreeRTOS.h>
+
+// Define task handles
+TaskHandle_t rgbTaskHandle;
+TaskHandle_t buttonTaskHandle;
+TaskHandle_t hcsr04TaskHandle;
+TaskHandle_t buzzerTaskHandle;
+
+// Define pin assignments
+const int RGB_PIN_RED = 9;
+const int RGB_PIN_GREEN = 10;
+const int RGB_PIN_BLUE = 11;
+const int BUTTON_PIN = 2;
+const int TRIGGER_PIN = 3;
+const int ECHO_PIN = 4;
+const int BUZZER_PIN = 5;
+
+// Define thresholds and flags
+const int DISTANCE_THRESHOLD = 20;  // Distance threshold in centimeters
+volatile bool buttonPressed = false;
+volatile int distance = 0;
+
+// Task function prototypes
+void rgbTask(void* pvParameters);
+void buttonTask(void* pvParameters);
+void hcsr04Task(void* pvParameters);
+void buzzerTask(void* pvParameters);
+
+void setup() {
+  // Initialize hardware and pins
+  pinMode(RGB_PIN_RED, OUTPUT);
+  pinMode(RGB_PIN_GREEN, OUTPUT);
+  pinMode(RGB_PIN_BLUE, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(TRIGGER_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  // Create tasks
+  xTaskCreate(rgbTask, "RGB Task", 128, NULL, 1, &rgbTaskHandle);
+  xTaskCreate(buttonTask, "Button Task", 128, NULL, 1, &buttonTaskHandle);
+  xTaskCreate(hcsr04Task, "HCSR04 Task", 128, NULL, 1, &hcsr04TaskHandle);
+  xTaskCreate(buzzerTask, "Buzzer Task", 128, NULL, 1, &buzzerTaskHandle);
+  Serial.begin(9600);
+  // Start the scheduler
+  vTaskStartScheduler();
+}
+
+void loop() {
+  // Code that runs continuously outside the tasks
+}
+
+void rgbTask(void* pvParameters) {
+  (void)pvParameters;
+  int currentColor = 0;
+  const int NUM_COLORS = 3;
+  const int RGB_COLORS[NUM_COLORS][3] = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}};
+  
+  while (true) {
+    // Change colors of the RGB diode based on button press
+    if (buttonPressed) {
+      analogWrite(RGB_PIN_RED, RGB_COLORS[currentColor][0]);
+      analogWrite(RGB_PIN_GREEN, RGB_COLORS[currentColor][1]);
+      analogWrite(RGB_PIN_BLUE, RGB_COLORS[currentColor][2]);
+
+      currentColor = (currentColor + 1) % NUM_COLORS;
+    } else {
+      // Turn off RGB diode
+      analogWrite(RGB_PIN_RED, 0);
+      analogWrite(RGB_PIN_GREEN, 0);
+      analogWrite(RGB_PIN_BLUE, 0);
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+
+void buttonTask(void* pvParameters) {
+  (void)pvParameters;
+  while (true) {
+    // Check for button press and set flag accordingly
+    if (digitalRead(BUTTON_PIN) == LOW) {
+      buttonPressed = true;
+    } else {
+      buttonPressed = false;
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+void hcsr04Task(void* pvParameters) {
+  (void)pvParameters;
+  while (true) {
+    // Read distance from HCSR04 sensor and store in a variable
+    digitalWrite(TRIGGER_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIGGER_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIGGER_PIN, LOW);
+    unsigned long duration = pulseIn(ECHO_PIN, HIGH);
+    distance = duration * 0.034 / 2;
+
+    // Print distance in the serial monitor
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+
+void buzzerTask(void* pvParameters) {
+  (void)pvParameters;
+  while (true) {
+    // Check if distance from HCSR04 sensor is above threshold
+    // If above threshold, produce a sound with the buzzer
+    if (distance > DISTANCE_THRESHOLD) {
+      tone(BUZZER_PIN, 1000);  // Set the desired frequency (e.g., 1000Hz)
+    } else {
+      noTone(BUZZER_PIN);  // Stop the sound
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+

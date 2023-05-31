@@ -1,0 +1,91 @@
+#include <Arduino_FreeRTOS.h>
+#include <semphr.h>
+
+// Pin Definitions
+#define LED_PIN 13
+#define BUTTON_PIN 2
+#define RESET_PIN A0
+
+// Task Priorities
+#define BLINK_TASK_PRIORITY 1
+#define BUTTON_TASK_PRIORITY 1
+#define FREQUENCY_RESET_TASK_PRIORITY 1
+
+// Task Stack Sizes
+#define BLINK_TASK_STACK_SIZE 128
+#define BUTTON_TASK_STACK_SIZE 128
+#define FREQUENCY_RESET_TASK_STACK_SIZE 128
+
+// Global Variables
+volatile int frequency = 1; // Default frequency
+
+// Semaphores
+SemaphoreHandle_t frequencyMutex;
+
+// Making the LED blink task
+void BlinkTask(void* pvParameters) {
+  (void)pvParameters;
+
+  pinMode(LED_PIN, OUTPUT);
+
+  while (1) {
+    digitalWrite(LED_PIN, HIGH);  
+    vTaskDelay(pdMS_TO_TICKS(1000 / frequency));
+    digitalWrite(LED_PIN, LOW);  
+    vTaskDelay(pdMS_TO_TICKS(1000 / frequency));
+  }
+}
+
+// Increasing the frequency task
+void ButtonTask(void* pvParameters) {
+  (void)pvParameters;
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  while (1) {
+    //If the button is pressed then..
+    if (digitalRead(BUTTON_PIN) == LOW) {
+      xSemaphoreTake(frequencyMutex, portMAX_DELAY);
+      frequency++;
+      xSemaphoreGive(frequencyMutex);
+      delay(200);  // Debounce delay
+    }
+
+    delay(10);
+  }
+}
+
+// Frequency reset using potentiometer
+void FrequencyResetTask(void* pvParameters) {
+  (void)pvParameters;
+
+  pinMode(RESET_PIN, INPUT);
+
+  while (1) {
+    int resetVoltage = analogRead(RESET_PIN);
+    if (resetVoltage >= 512) {  // 2.5V or higher
+      xSemaphoreTake(frequencyMutex, portMAX_DELAY);
+      frequency = 1;  // Reset frequency to default value
+      xSemaphoreGive(frequencyMutex);
+    }
+
+    delay(10);
+  }
+}
+
+void setup() {
+  // Create the frequency mutex
+  frequencyMutex = xSemaphoreCreateMutex();
+
+  // Create tasks
+  xTaskCreate(BlinkTask, "BlinkTask", BLINK_TASK_STACK_SIZE, NULL, BLINK_TASK_PRIORITY, NULL);
+  xTaskCreate(ButtonTask, "ButtonTask", BUTTON_TASK_STACK_SIZE, NULL, BUTTON_TASK_PRIORITY, NULL);
+  xTaskCreate(FrequencyResetTask, "FrequencyResetTask", FREQUENCY_RESET_TASK_STACK_SIZE, NULL, FREQUENCY_RESET_TASK_PRIORITY, NULL);
+
+  // Start the FreeRTOS scheduler
+  vTaskStartScheduler();
+}
+
+void loop() {
+  // Empty loop
+}
